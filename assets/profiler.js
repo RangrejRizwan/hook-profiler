@@ -1,0 +1,432 @@
+window.WP_Hook_Profiler = (function($) {
+    'use strict';
+    
+    let profileData = null;
+    let currentSort = { column: null, direction: 'desc' };
+    
+    function init() {
+        $(document).ready(function() {
+            bindEvents();
+            profileData = window.hook_profiler_data;
+        });
+    }
+    
+    function bindEvents() {
+        $('#wp-hook-profiler-close, #wp-hook-profiler-overlay').on('click', hide);
+        $('#wp-hook-profiler-refresh').on('click', loadProfileData);
+        
+        $('.wp-hook-profiler-tab').on('click', function() {
+            const tabName = $(this).data('tab');
+            switchTab(tabName);
+        });
+        
+        $(document).on('click', '.wp-hook-profiler-table th.sortable', function() {
+            const column = $(this).data('sort');
+            sortTable(column, $(this).closest('table'));
+        });
+        
+        $('#wp-hook-profiler-search-plugins').on('input', debounce(filterPluginsTable, 300));
+        $('#wp-hook-profiler-search-callbacks').on('input', debounce(filterCallbacksTable, 300));
+        $('#wp-hook-profiler-search-hooks, #wp-hook-profiler-filter-plugin').on('input change', debounce(filterHooksList, 300));
+        $('#wp-hook-profiler-search-plugin-loading, #wp-hook-profiler-filter-loading-type').on('input change', debounce(filterPluginLoadingTable, 300));
+        
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape' && isVisible()) {
+                hide();
+            }
+        });
+    }
+    
+    function toggle() {
+        if (isVisible()) {
+            hide();
+        } else {
+            show();
+        }
+    }
+    
+    function show() {
+        $('#wp-hook-profiler-panel, #wp-hook-profiler-overlay').show();
+        loadProfileData();
+
+    }
+    
+    function hide() {
+        $('#wp-hook-profiler-panel, #wp-hook-profiler-overlay').hide();
+    }
+    
+    function isVisible() {
+        return $('#wp-hook-profiler-panel').is(':visible');
+    }
+    
+    function loadProfileData() {
+        showLoading();
+
+        updateSummary();
+        updateAllTables();
+        hideLoading();
+    }
+    
+    function showLoading() {
+        $('.wp-hook-profiler-loading').show();
+        $('.wp-hook-profiler-content').hide();
+    }
+    
+    function hideLoading() {
+        $('.wp-hook-profiler-loading').hide();
+        $('.wp-hook-profiler-content').show();
+    }
+    
+    function showError(message) {
+        const errorEl = $('#wp-hook-profiler-error');
+        if (message) {
+            $('#wp-hook-profiler-error-message').text(message);
+            errorEl.show();
+        } else {
+            errorEl.hide();
+        }
+    }
+    
+    function updateSummary() {
+        if (!profileData) return;
+        
+        $('#wp-hook-profiler-total-hooks').text(profileData.total_hooks.toLocaleString());
+        $('#wp-hook-profiler-total-time').text((profileData.total_execution_time).toFixed(2));
+    }
+    
+    function updateAllTables() {
+        updatePluginsTable();
+        updateCallbacksTable();
+        updateHooksList();
+        updatePluginLoadingTable();
+        populatePluginFilter();
+    }
+    
+    function updatePluginsTable() {
+        if (!profileData?.plugins) return;
+        
+        const tbody = $('#wp-hook-profiler-plugins-table');
+        const plugins = Object.values(profileData.plugins);
+        
+        tbody.empty();
+        
+        plugins.forEach(plugin => {
+            const avgTime = plugin.callback_count > 0 ? (plugin.total_time / plugin.callback_count) : 0;
+            const timeClass = getTimeColorClass(plugin.total_time);
+            
+            const row = $(`
+                <tr>
+                    <td><span class="wp-hook-profiler-plugin-name">${escapeHtml(plugin.plugin_name)}</span></td>
+                    <td class="numeric ${timeClass}">${(plugin.total_time).toFixed(3)}</td>
+                    <td class="numeric">${plugin.hook_count}</td>
+                    <td class="numeric">${plugin.callback_count}</td>
+                    <td class="numeric">${avgTime.toFixed(3)}</td>
+                </tr>
+            `);
+            
+            tbody.append(row);
+        });
+    }
+    
+    function updateCallbacksTable() {
+        if (!profileData?.callbacks) return;
+        
+        const tbody = $('#wp-hook-profiler-callbacks-table');
+        
+        tbody.empty();
+        
+        profileData.callbacks.forEach(callback => {
+            const timeMs = callback.total_time;
+            const timeClass = getTimeColorClass(timeMs);
+            
+            const row = $(`
+                <tr>
+                    <td><span class="wp-hook-profiler-callback-name" title="${escapeHtml(callback.source_file)}">${escapeHtml(callback.callback)}</span></td>
+                    <td><span class="wp-hook-profiler-hook-name">${escapeHtml(callback.hook)}</span></td>
+                    <td><span class="wp-hook-profiler-plugin-name">${escapeHtml(callback.plugin)}</span></td>
+                    <td class="numeric ${timeClass}">${timeMs.toFixed(3)}</td>
+                    <td class="numeric">${callback.call_count}</td>
+                </tr>
+            `);
+            
+            tbody.append(row);
+        });
+    }
+    
+    function updateHooksList() {
+        if (!profileData?.callbacks) return;
+        
+        const container = $('#wp-hook-profiler-hooks-list');
+        const hookGroups = groupCallbacksByHook(profileData.callbacks);
+        
+        container.empty();
+        
+        Object.entries(hookGroups).forEach(([hookName, callbacks]) => {
+            const totalTime = callbacks.reduce((sum, cb) => sum + cb.execution_time, 0) * 1000;
+            const timeClass = getTimeColorClass(totalTime);
+            
+            const hookGroup = $(`
+                <div class="wp-hook-profiler-hook-group" data-hook="${hookName}">
+                    <div class="wp-hook-profiler-hook-header">
+                        ${escapeHtml(hookName)} 
+                        <span class="${timeClass}" style="float: right;">${totalTime.toFixed(3)}ms</span>
+                    </div>
+                    <div class="wp-hook-profiler-hook-callbacks"></div>
+                </div>
+            `);
+            
+            const callbacksContainer = hookGroup.find('.wp-hook-profiler-hook-callbacks');
+            
+            callbacks.forEach(callback => {
+                const timeMs = callback.total_time;
+                const timeClass = getTimeColorClass(timeMs);
+                
+                const callbackItem = $(`
+                    <div class="wp-hook-profiler-callback-item">
+                        <div class="wp-hook-profiler-callback-info">
+                            <div class="wp-hook-profiler-callback-name">${escapeHtml(callback.callback)}</div>
+                            <div class="wp-hook-profiler-callback-meta">
+                                Plugin: ${escapeHtml(callback.plugin)} | Priority: ${callback.priority}
+                            </div>
+                        </div>
+                        <div class="wp-hook-profiler-callback-time ${timeClass}">
+                            ${timeMs.toFixed(3)}ms
+                        </div>
+                    </div>
+                `);
+                
+                callbacksContainer.append(callbackItem);
+            });
+            
+            container.append(hookGroup);
+        });
+    }
+    
+    function populatePluginFilter() {
+        if (!profileData?.plugins) return;
+        
+        const select = $('#wp-hook-profiler-filter-plugin');
+        const currentValue = select.val();
+        
+        select.find('option:not(:first)').remove();
+        
+        Object.values(profileData.plugins).forEach(plugin => {
+            select.append(`<option value="${escapeHtml(plugin.plugin_name)}">${escapeHtml(plugin.plugin_name)}</option>`);
+        });
+        
+        select.val(currentValue);
+    }
+    
+    function switchTab(tabName) {
+        $('.wp-hook-profiler-tab').removeClass('active');
+        $(`.wp-hook-profiler-tab[data-tab="${tabName}"]`).addClass('active');
+        
+        $('.wp-hook-profiler-tab-content').hide();
+        $(`#wp-hook-profiler-tab-${tabName}`).show();
+    }
+    
+    function sortTable(column, table) {
+        const tbody = table.find('tbody');
+        const rows = tbody.find('tr').toArray();
+        
+        let direction = 'asc';
+        if (currentSort.column === column && currentSort.direction === 'asc') {
+            direction = 'desc';
+        }
+        
+        table.find('th').removeClass('sort-asc sort-desc');
+        table.find(`th[data-sort="${column}"]`).addClass(`sort-${direction}`);
+        
+        currentSort = { column, direction };
+        
+        const columnIndex = table.find(`th[data-sort="${column}"]`).index();
+        const isNumeric = table.find(`th[data-sort="${column}"]`).hasClass('numeric');
+        
+        rows.sort((a, b) => {
+            let aVal = $(a).find(`td:eq(${columnIndex})`).text().trim();
+            let bVal = $(b).find(`td:eq(${columnIndex})`).text().trim();
+            
+            if (isNumeric) {
+                aVal = parseFloat(aVal) || 0;
+                bVal = parseFloat(bVal) || 0;
+            }
+            
+            if (direction === 'asc') {
+                return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+            } else {
+                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+            }
+        });
+        
+        tbody.empty().append(rows);
+    }
+    
+    function filterPluginsTable() {
+        const searchTerm = $('#wp-hook-profiler-search-plugins').val().toLowerCase();
+        const tbody = $('#wp-hook-profiler-plugins-table');
+        
+        tbody.find('tr').each(function() {
+            const pluginName = $(this).find('td:first').text().toLowerCase();
+            $(this).toggle(pluginName.includes(searchTerm));
+        });
+    }
+    
+    function filterCallbacksTable() {
+        const searchTerm = $('#wp-hook-profiler-search-callbacks').val().toLowerCase();
+        const tbody = $('#wp-hook-profiler-callbacks-table');
+        
+        tbody.find('tr').each(function() {
+            const text = $(this).text().toLowerCase();
+            $(this).toggle(text.includes(searchTerm));
+        });
+    }
+    
+    function filterHooksList() {
+        const searchTerm = $('#wp-hook-profiler-search-hooks').val().toLowerCase();
+        const pluginFilter = $('#wp-hook-profiler-filter-plugin').val();
+        
+        $('.wp-hook-profiler-hook-group').each(function() {
+            const hookName = $(this).data('hook').toLowerCase();
+            const matchesSearch = !searchTerm || hookName.includes(searchTerm);
+            
+            let matchesPlugin = !pluginFilter;
+            if (pluginFilter) {
+                const hasMatchingPlugin = $(this).find('.wp-hook-profiler-callback-meta')
+                    .toArray()
+                    .some(el => $(el).text().includes(`Plugin: ${pluginFilter}`));
+                matchesPlugin = hasMatchingPlugin;
+            }
+            
+            $(this).toggle(matchesSearch && matchesPlugin);
+        });
+    }
+    
+    function groupCallbacksByHook(callbacks) {
+        const groups = {};
+        
+        callbacks.forEach(callback => {
+            if (!groups[callback.hook]) {
+                groups[callback.hook] = [];
+            }
+            groups[callback.hook].push(callback);
+        });
+        
+        Object.keys(groups).forEach(hookName => {
+            groups[hookName].sort((a, b) => b.execution_time - a.execution_time);
+        });
+        
+        return groups;
+    }
+    
+    function getTimeColorClass(timeMs) {
+        if (timeMs > 10) return 'wp-hook-profiler-time-high';
+        if (timeMs > 1) return 'wp-hook-profiler-time-medium';
+        return 'wp-hook-profiler-time-low';
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function updatePluginLoadingTable() {
+        if (!profileData?.plugin_loading) return;
+        
+        const tbody = $('#wp-hook-profiler-plugin-loading-table');
+        const loadingData = Object.entries(profileData.plugin_loading);
+        
+        tbody.empty();
+        
+        // Sort by duration descending
+        loadingData.sort(([,a], [,b]) => b.duration - a.duration);
+        
+        let totalLoadingTime = 0;
+        let sunriseTime = 0;
+        let muPluginsTime = 0;
+        let networkPluginsTime = 0;
+        let pluginsTime = 0;
+        
+        loadingData.forEach(([file, data]) => {
+            const durationMs = (data.duration * 1000);
+            const timeClass = getTimeColorClass(durationMs);
+            totalLoadingTime += durationMs;
+            
+            // Aggregate by type
+            switch (data.type) {
+                case 'sunrise':
+                    sunriseTime += durationMs;
+                    break;
+                case 'mu_plugin':
+                    muPluginsTime += durationMs;
+                    break;
+                case 'network_plugin':
+                    networkPluginsTime += durationMs;
+                    break;
+                case 'plugin':
+                    pluginsTime += durationMs;
+                    break;
+            }
+            
+            const row = $(`
+                <tr data-type="${data.type}">
+                    <td><span class="wp-hook-profiler-file-name" title="${escapeHtml(file)}">${escapeHtml(file.split('/').pop())}</span></td>
+                    <td><span class="wp-hook-profiler-type-badge wp-hook-profiler-type-${data.type}">${escapeHtml(data.type)}</span></td>
+                    <td class="numeric ${timeClass}">${durationMs.toFixed(3)}</td>
+                    <td class="numeric">${data.start_time ? new Date(data.start_time * 1000).toISOString().substr(11, 12) : '-'}</td>
+                    <td class="numeric">${data.end_time ? new Date(data.end_time * 1000).toISOString().substr(11, 12) : '-'}</td>
+                </tr>
+            `);
+            
+            tbody.append(row);
+        });
+        
+        // Update summary
+        $('#wp-hook-profiler-sunrise-time').text(sunriseTime.toFixed(3));
+        $('#wp-hook-profiler-mu-plugins-time').text(muPluginsTime.toFixed(3));
+        $('#wp-hook-profiler-network-plugins-time').text(networkPluginsTime.toFixed(3));
+        $('#wp-hook-profiler-plugins-time').text(pluginsTime.toFixed(3));
+        $('#wp-hook-profiler-total-loading-time').text(totalLoadingTime.toFixed(3));
+        
+        if (loadingData.length === 0) {
+            tbody.append('<tr><td colspan="5">No plugin loading data available</td></tr>');
+        }
+    }
+    
+    function filterPluginLoadingTable() {
+        const searchTerm = $('#wp-hook-profiler-search-plugin-loading').val().toLowerCase();
+        const typeFilter = $('#wp-hook-profiler-filter-loading-type').val();
+        const tbody = $('#wp-hook-profiler-plugin-loading-table');
+        
+        tbody.find('tr').each(function() {
+            const fileName = $(this).find('td:first').text().toLowerCase();
+            const type = $(this).data('type');
+            
+            const matchesSearch = !searchTerm || fileName.includes(searchTerm);
+            const matchesType = !typeFilter || type === typeFilter;
+            
+            $(this).toggle(matchesSearch && matchesType);
+        });
+    }
+    
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    
+    init();
+    
+    return {
+        toggle: toggle,
+        show: show,
+        hide: hide
+    };
+    
+})(jQuery);
