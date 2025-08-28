@@ -148,9 +148,9 @@ class WP_Hook_Profiler {
 		if (!is_dir(WPMU_PLUGIN_DIR)) {
 			mkdir(WPMU_PLUGIN_DIR);
 		}
-		if (!file_exists(WPMU_PLUGIN_DIR .'/aaaa-wp-hook-profiler-timing.php')) {
-			copy(WP_HOOK_PROFILER_DIR . 'mu-plugin/aaaaa-wp-hook-profiler-timing.php', WPMU_PLUGIN_DIR .'/aaaaa-wp-hook-profiler-timing.php');
-		}
+
+		copy(WP_HOOK_PROFILER_DIR . 'mu-plugin/aaaaa-hook-profiler-plugin-timing.php.txt', WPMU_PLUGIN_DIR .'/aaaaa-wp-hook-profiler-timing.php');
+
 	}
 
 	public static function delete_mu_plugin() {
@@ -173,7 +173,7 @@ class WP_Hook_Profiler {
         $content = file_get_contents($sunrise_path);
         
         // Check if our timing code is already present
-        if (strpos($content, 'WP_HOOK_PROFILER_SUNRISE_START_TIME') !== false) {
+        if (strpos($content, '$wp_hook_profiler_sunrise_start_time') !== false) {
             return; // Already modified
         }
         
@@ -181,22 +181,10 @@ class WP_Hook_Profiler {
         file_put_contents($sunrise_path . '.wp-hook-profiler-backup', $content);
         
         // Add timing code at the beginning
-        $timing_start = "<?php\n// WP Hook Profiler Timing - Start\ndefine('WP_HOOK_PROFILER_SUNRISE_START_TIME', microtime(true));\n\n";
+        $timing_start = "<?php\n// WP Hook Profiler Timing - Start\nglobal \$wp_hook_profiler_sunrise_start_time;\n\$wp_hook_profiler_sunrise_start_time = hrtime(true);\n\n";
         
         // Add timing code at the end before the closing \?\> or at the very end
-        $timing_end = "\n// WP Hook Profiler Timing - End\ndefine('WP_HOOK_PROFILER_SUNRISE_END_TIME', microtime(true));\n\n// Hook listeners for plugin loading events\n";
-        $timing_end .= "add_action('mu_plugin_loaded', function(\$plugin) {\n";
-        $timing_end .= "    function_exists('wp_hook_profiler_record_plugin_timing') && wp_hook_profiler_record_plugin_timing(\$plugin, 'mu_plugin');\n";
-        $timing_end .= "});\n";
-        $timing_end .= "add_action('network_plugin_loaded', function(\$plugin) {\n";
-        $timing_end .= "   function_exists('wp_hook_profiler_record_plugin_timing') && wp_hook_profiler_record_plugin_timing(\$plugin, 'network_plugin');\n";
-        $timing_end .= "});\n";
-        $timing_end .= "add_action('muplugins_loaded', function() {\n";
-        $timing_end .= "    function_exists('wp_hook_profiler_record_plugin_timing') && wp_hook_profiler_record_plugin_timing('muplugins_loaded', 'core');\n";
-        $timing_end .= "});\n";
-        $timing_end .= "add_action('plugin_loaded', function(\$plugin) {\n";
-        $timing_end .= "    function_exists('wp_hook_profiler_record_plugin_timing') && wp_hook_profiler_record_plugin_timing(\$plugin, 'plugin');\n";
-        $timing_end .= "});";
+        $timing_end = "\n// WP Hook Profiler Timing - End\nglobal \$wp_hook_profiler_sunrise_end_time;\n\$wp_hook_profiler_sunrise_end_time = hrtime(true);";
         
         // Replace opening PHP tag with our timing start
         $content = preg_replace('/^<\?php/', $timing_start, $content, 1);

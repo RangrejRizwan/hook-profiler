@@ -9,6 +9,7 @@
 /**
  * This must-use plugin loads first alphabetically to initialize timing
  * tracking for all other plugins and core functionality.
+ * It has a txt extension before being copied so WordPress does not think it's the primary plugin file.
  * 
  * @package WP_Hook_Profiler
  * @version 1.0.0
@@ -20,18 +21,18 @@ defined('ABSPATH') || exit;
 global $wp_hook_profiler_plugin_timings, $wp_hook_profiler_current_plugin_start;
 
 $wp_hook_profiler_plugin_timings = [];
-$wp_hook_profiler_current_plugin_start = microtime(true);
+$wp_hook_profiler_current_plugin_start = hrtime(true);
 
 /**
  * Initialize timing tracking system
  */
 function wp_hook_profiler_init_timing() {
-	global $wp_hook_profiler_plugin_timings, $wp_hook_profiler_current_plugin_start;
+	global $wp_hook_profiler_plugin_timings, $wp_hook_profiler_current_plugin_start, $wp_hook_profiler_sunrise_start_time;
 	
 	// Record sunrise.php start time if available
-	if (defined('WP_HOOK_PROFILER_SUNRISE_START_TIME')) {
+	if (isset($wp_hook_profiler_sunrise_start_time)) {
 		$wp_hook_profiler_plugin_timings['sunrise.php'] = [
-			'start_time' => WP_HOOK_PROFILER_SUNRISE_START_TIME,
+			'start_time' => $wp_hook_profiler_sunrise_start_time,
 			'end_time' => null,
 			'duration' => 0,
 			'type' => 'sunrise'
@@ -39,7 +40,7 @@ function wp_hook_profiler_init_timing() {
 	}
 	
 	// Initialize current plugin start time
-	$wp_hook_profiler_current_plugin_start = microtime(true);
+	$wp_hook_profiler_current_plugin_start = hrtime(true);
 }
 
 /**
@@ -48,8 +49,8 @@ function wp_hook_profiler_init_timing() {
 function wp_hook_profiler_record_plugin_timing($plugin_file, $type = 'plugin') {
 	global $wp_hook_profiler_plugin_timings, $wp_hook_profiler_current_plugin_start;
 	
-	$end_time = microtime(true);
-	$duration = $end_time - $wp_hook_profiler_current_plugin_start;
+	$end_time = hrtime(true);
+	$duration = ($end_time - $wp_hook_profiler_current_plugin_start) / 1000000; // Convert from nanoseconds to milliseconds
 	
 	$wp_hook_profiler_plugin_timings[$plugin_file] = [
 		'start_time' => $wp_hook_profiler_current_plugin_start,
@@ -59,23 +60,23 @@ function wp_hook_profiler_record_plugin_timing($plugin_file, $type = 'plugin') {
 	];
 	
 	// Reset start time for next plugin
-	$wp_hook_profiler_current_plugin_start = microtime(true);
+	$wp_hook_profiler_current_plugin_start = hrtime(true);
 }
 
 /**
  * Get all timing data
  */
 function wp_hook_profiler_get_timing_data() {
-	global $wp_hook_profiler_plugin_timings;
+	global $wp_hook_profiler_plugin_timings, $wp_hook_profiler_sunrise_end_time, $wp_hook_profiler_sunrise_start_time;
 	
 	// Finalize sunrise.php timing if it exists
 	if (isset($wp_hook_profiler_plugin_timings['sunrise.php']) && 
 		$wp_hook_profiler_plugin_timings['sunrise.php']['end_time'] === null && 
-		defined('WP_HOOK_PROFILER_SUNRISE_END_TIME')) {
+		isset($wp_hook_profiler_sunrise_end_time)) {
 		
-		$wp_hook_profiler_plugin_timings['sunrise.php']['end_time'] = WP_HOOK_PROFILER_SUNRISE_END_TIME;
+		$wp_hook_profiler_plugin_timings['sunrise.php']['end_time'] = $wp_hook_profiler_sunrise_end_time;
 		$wp_hook_profiler_plugin_timings['sunrise.php']['duration'] = 
-			WP_HOOK_PROFILER_SUNRISE_END_TIME - WP_HOOK_PROFILER_SUNRISE_START_TIME;
+			($wp_hook_profiler_sunrise_end_time - $wp_hook_profiler_sunrise_start_time) / 1000000; // Convert from nanoseconds to milliseconds
 	}
 	
 	return $wp_hook_profiler_plugin_timings ?: [];
@@ -83,3 +84,20 @@ function wp_hook_profiler_get_timing_data() {
 
 // Initialize timing system
 wp_hook_profiler_init_timing();
+
+// Hook listeners for plugin loading events
+add_action('mu_plugin_loaded', function($plugin) {
+    wp_hook_profiler_record_plugin_timing($plugin, 'mu_plugin');
+});
+
+add_action('network_plugin_loaded', function($plugin) {
+    wp_hook_profiler_record_plugin_timing($plugin, 'network_plugin');
+});
+
+add_action('muplugins_loaded', function() {
+    wp_hook_profiler_record_plugin_timing('muplugins_loaded', 'core');
+});
+
+add_action('plugin_loaded', function($plugin) {
+    wp_hook_profiler_record_plugin_timing($plugin, 'plugin');
+});

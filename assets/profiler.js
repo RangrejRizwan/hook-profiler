@@ -13,7 +13,6 @@ window.WP_Hook_Profiler = (function($) {
     
     function bindEvents() {
         $('#wp-hook-profiler-close, #wp-hook-profiler-overlay').on('click', hide);
-        $('#wp-hook-profiler-refresh').on('click', loadProfileData);
         
         $('.wp-hook-profiler-tab').on('click', function() {
             const tabName = $(this).data('tab');
@@ -29,6 +28,12 @@ window.WP_Hook_Profiler = (function($) {
         $('#wp-hook-profiler-search-callbacks').on('input', debounce(filterCallbacksTable, 300));
         $('#wp-hook-profiler-search-hooks, #wp-hook-profiler-filter-plugin').on('input change', debounce(filterHooksList, 300));
         $('#wp-hook-profiler-search-plugin-loading, #wp-hook-profiler-filter-loading-type').on('input change', debounce(filterPluginLoadingTable, 300));
+        
+        $(document).on('click', '.wp-hook-profiler-plugin-link', function(e) {
+            e.preventDefault();
+            const pluginName = $(this).data('plugin');
+            switchToHooksTabWithPlugin(pluginName);
+        });
         
         $(document).on('keydown', function(e) {
             if (e.key === 'Escape' && isVisible()) {
@@ -116,7 +121,7 @@ window.WP_Hook_Profiler = (function($) {
             
             const row = $(`
                 <tr>
-                    <td><span class="wp-hook-profiler-plugin-name">${escapeHtml(plugin.plugin_name)}</span></td>
+                    <td><a href="#" class="wp-hook-profiler-plugin-link" data-plugin="${escapeHtml(plugin.plugin_name)}">${escapeHtml(plugin.plugin_name)}</a></td>
                     <td class="numeric ${timeClass}">${(plugin.total_time).toFixed(3)}</td>
                     <td class="numeric">${plugin.hook_count}</td>
                     <td class="numeric">${plugin.callback_count}</td>
@@ -223,6 +228,12 @@ window.WP_Hook_Profiler = (function($) {
         
         $('.wp-hook-profiler-tab-content').hide();
         $(`#wp-hook-profiler-tab-${tabName}`).show();
+    }
+    
+    function switchToHooksTabWithPlugin(pluginName) {
+        switchTab('hooks');
+        $('#wp-hook-profiler-filter-plugin').val(pluginName);
+        filterHooksList();
     }
     
     function sortTable(column, table) {
@@ -348,7 +359,7 @@ window.WP_Hook_Profiler = (function($) {
         let pluginsTime = 0;
         
         loadingData.forEach(([file, data]) => {
-            const durationMs = (data.duration * 1000);
+            const durationMs = data.duration; // Duration is already in milliseconds
             const timeClass = getTimeColorClass(durationMs);
             totalLoadingTime += durationMs;
             
@@ -373,8 +384,8 @@ window.WP_Hook_Profiler = (function($) {
                     <td><span class="wp-hook-profiler-file-name" title="${escapeHtml(file)}">${escapeHtml(file.split('/').pop())}</span></td>
                     <td><span class="wp-hook-profiler-type-badge wp-hook-profiler-type-${data.type}">${escapeHtml(data.type)}</span></td>
                     <td class="numeric ${timeClass}">${durationMs.toFixed(3)}</td>
-                    <td class="numeric">${data.start_time ? new Date(data.start_time * 1000).toISOString().substr(11, 12) : '-'}</td>
-                    <td class="numeric">${data.end_time ? new Date(data.end_time * 1000).toISOString().substr(11, 12) : '-'}</td>
+                    <td class="numeric">${data.start_time ? (data.start_time / 1e9).toFixed(6) : '-'}</td>
+                    <td class="numeric">${data.end_time ? (data.end_time / 1e9).toFixed(6) : '-'}</td>
                 </tr>
             `);
             

@@ -13,8 +13,7 @@ class WP_Hook_Profiler_Engine {
     private $recursion_guard = false;
     private $hook_depth = 0;
     private $max_hook_depth = 500;
-    private $callback_start_times = [];
-    
+
     public function __construct() {
         require_once WP_HOOK_PROFILER_DIR . 'inc/class-plugin-detector.php';
         require_once WP_HOOK_PROFILER_DIR . 'inc/class-callback-wrapper.php';
@@ -29,7 +28,6 @@ class WP_Hook_Profiler_Engine {
         $this->profiling_active = true;
         
         add_action('all', [$this, 'on_hook_start'], -999999);
-//        add_action('shutdown', [$this, 'finalize_profiling'], 999999);
     }
     
     public function on_hook_start($hook_name) {
@@ -136,14 +134,6 @@ class WP_Hook_Profiler_Engine {
     
     public function get_callback_reflection($callback) {
         return $this->plugin_detector->get_callback_reflection($callback);
-    }
-    
-    public function finalize_profiling() {
-        if ($this->current_hook && $this->current_start_time) {
-            $this->record_hook_completion(microtime(true));
-        }
-        
-        $this->profiling_active = false;
     }
     
     public function get_profile_data() {

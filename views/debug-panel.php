@@ -9,7 +9,6 @@ defined('ABSPATH') || exit;
             WordPress Hook Profiler
         </h3>
         <div class="wp-hook-profiler-controls">
-            <button id="wp-hook-profiler-refresh" class="button button-small">Refresh Data</button>
             <button id="wp-hook-profiler-close" class="button button-small">×</button>
         </div>
     </div>

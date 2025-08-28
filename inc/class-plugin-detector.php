@@ -60,25 +60,31 @@ class WP_Hook_Profiler_Plugin_Detector {
     }
     
     public function get_callback_reflection($callback) {
-        if (is_string($callback)) {
-            if (function_exists($callback)) {
-                return new ReflectionFunction($callback);
+        try {
+            if (is_string($callback)) {
+                if (function_exists($callback)) {
+                    return new ReflectionFunction($callback);
+                }
+            } elseif (is_array($callback) && count($callback) === 2) {
+                $class = $callback[0];
+                $method = $callback[1];
+                
+                if (is_object($class)) {
+                    return new ReflectionMethod($class, $method);
+                } elseif (is_string($class) && class_exists($class)) {
+                    return new ReflectionMethod($class, $method);
+                }
+            } elseif (is_object($callback)) {
+                if ($callback instanceof Closure) {
+                    return new ReflectionFunction($callback);
+                } elseif (method_exists($callback, '__invoke')) {
+                    return new ReflectionMethod($callback, '__invoke');
+                }
             }
-        } elseif (is_array($callback) && count($callback) === 2) {
-            $class = $callback[0];
-            $method = $callback[1];
-            
-            if (is_object($class)) {
-                return new ReflectionMethod($class, $method);
-            } elseif (is_string($class) && class_exists($class)) {
-                return new ReflectionMethod($class, $method);
-            }
-        } elseif (is_object($callback)) {
-            if ($callback instanceof Closure) {
-                return new ReflectionFunction($callback);
-            } elseif (method_exists($callback, '__invoke')) {
-                return new ReflectionMethod($callback, '__invoke');
-            }
+        } catch (ReflectionException $e) {
+            // Return null if reflection fails
+        } catch (Exception $e) {
+            // Return null for any other errors
         }
         
         return null;
@@ -88,53 +94,72 @@ class WP_Hook_Profiler_Plugin_Detector {
         $plugins = $this->get_plugins_data();
         
         foreach ($plugins as $plugin_file => $plugin_data) {
-            $plugin_dir = dirname(WP_PLUGIN_DIR . '/' . $plugin_file);
+            try {
+                $plugin_dir = dirname(WP_PLUGIN_DIR . '/' . $plugin_file);
 
-			if (!str_contains($plugin_file, '/')) {
-				if ($filename === $plugin_file) {
-					return [
-						'plugin' => $this->get_plugin_slug($plugin_file),
-						'plugin_name' => $plugin_data['Name'] ?? 'Unknown Plugin',
-						'plugin_file' => $plugin_file
-					];
-				}
-			} else if (strpos($filename, $plugin_dir) === 0) {
-                return [
-                    'plugin' => $this->get_plugin_slug($plugin_file),
-                    'plugin_name' => $plugin_data['Name'] ?? 'Unknown Plugin',
-                    'plugin_file' => $plugin_file
-                ];
+                if (!str_contains($plugin_file, '/')) {
+                    if ($filename === $plugin_file) {
+                        return [
+                            'plugin' => $this->get_plugin_slug($plugin_file),
+                            'plugin_name' => $this->safe_get_plugin_name($plugin_data, $plugin_file),
+                            'plugin_file' => $plugin_file
+                        ];
+                    }
+                } else if (strpos($filename, $plugin_dir) === 0) {
+                    return [
+                        'plugin' => $this->get_plugin_slug($plugin_file),
+                        'plugin_name' => $this->safe_get_plugin_name($plugin_data, $plugin_file),
+                        'plugin_file' => $plugin_file
+                    ];
+                }
+            } catch (Exception $e) {
+                // Skip this plugin if there's an error processing it
+                continue;
             }
         }
         
         if (strpos($filename, WP_PLUGIN_DIR) === 0) {
-            $relative_path = str_replace(WP_PLUGIN_DIR . '/', '', $filename);
-            $plugin_slug = explode('/', $relative_path)[0];
-            
-            return [
-                'plugin' => $plugin_slug,
-                'plugin_name' => ucwords(str_replace(['-', '_'], ' ', $plugin_slug)),
-                'plugin_file' => null
-            ];
+            try {
+                $relative_path = str_replace(WP_PLUGIN_DIR . '/', '', $filename);
+                $path_parts = explode('/', $relative_path);
+                $plugin_slug = $path_parts[0];
+                
+                return [
+                    'plugin' => $plugin_slug,
+                    'plugin_name' => ucwords(str_replace(['-', '_'], ' ', $plugin_slug)),
+                    'plugin_file' => null
+                ];
+            } catch (Exception $e) {
+                // If path parsing fails, continue to unknown source
+            }
         }
         
         return null;
     }
     
     private function match_file_to_theme($filename) {
-        $theme_root = get_theme_root();
-        
-        if (strpos($filename, $theme_root) === 0) {
-            $relative_path = str_replace($theme_root . '/', '', $filename);
-            $theme_slug = explode('/', $relative_path)[0];
+        try {
+            $theme_root = get_theme_root();
             
-            $theme = wp_get_theme($theme_slug);
-            
-            return [
-                'plugin' => 'theme-' . $theme_slug,
-                'plugin_name' => $theme->exists() ? $theme->get('Name') : ucwords(str_replace(['-', '_'], ' ', $theme_slug)),
-                'plugin_file' => null
-            ];
+            if (strpos($filename, $theme_root) === 0) {
+                $relative_path = str_replace($theme_root . '/', '', $filename);
+                $theme_slug = explode('/', $relative_path)[0];
+                
+                try {
+                    $theme = wp_get_theme($theme_slug);
+                    $theme_name = $theme->exists() ? $theme->get('Name') : ucwords(str_replace(['-', '_'], ' ', $theme_slug));
+                } catch (Exception $e) {
+                    $theme_name = ucwords(str_replace(['-', '_'], ' ', $theme_slug));
+                }
+                
+                return [
+                    'plugin' => 'theme-' . $theme_slug,
+                    'plugin_name' => $theme_name,
+                    'plugin_file' => null
+                ];
+            }
+        } catch (Exception $e) {
+            // If theme detection fails, return null and let it fall through to other detection methods
         }
         
         return null;
@@ -156,7 +181,21 @@ class WP_Hook_Profiler_Plugin_Detector {
                 require_once ABSPATH . 'wp-admin/includes/plugin.php';
             }
             
-            $this->plugins_cache = get_plugins();
+            $all_plugins = get_plugins();
+            $this->plugins_cache = [];
+            
+            // Filter out plugins with invalid data structures
+            foreach ($all_plugins as $plugin_file => $plugin_data) {
+                try {
+                    // Test if we can safely access the plugin data
+                    if (is_array($plugin_data)) {
+                        $this->plugins_cache[$plugin_file] = $plugin_data;
+                    }
+                } catch (Exception $e) {
+                    // Skip plugins with invalid data
+                    continue;
+                }
+            }
         } catch (Exception $e) {
             $this->plugins_cache = [];
         }
@@ -165,11 +204,29 @@ class WP_Hook_Profiler_Plugin_Detector {
     }
     
     private function get_plugin_slug($plugin_file) {
-        if (strpos($plugin_file, '/') !== false) {
-            return dirname($plugin_file);
+        try {
+            if (strpos($plugin_file, '/') !== false) {
+                return dirname($plugin_file);
+            }
+            
+            return pathinfo($plugin_file, PATHINFO_FILENAME);
+        } catch (Exception $e) {
+            return 'unknown-plugin';
         }
-        
-        return pathinfo($plugin_file, PATHINFO_FILENAME);
+    }
+    
+    private function safe_get_plugin_name($plugin_data, $plugin_file) {
+        try {
+            if (is_array($plugin_data) && isset($plugin_data['Name']) && !empty($plugin_data['Name'])) {
+                return $plugin_data['Name'];
+            }
+            
+            // Fallback to a readable name based on the plugin file
+            $slug = $this->get_plugin_slug($plugin_file);
+            return ucwords(str_replace(['-', '_'], ' ', $slug));
+        } catch (Exception $e) {
+            return 'Unknown Plugin';
+        }
     }
     
     private function unknown_source($file = null, $line = null) {

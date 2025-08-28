@@ -9,15 +9,12 @@ class WP_Hook_Profiler_Callback_Wrapper {
     private $priority;
     private $accepted_args;
     private WP_Hook_Profiler_Engine $engine;
-    private $uses_references;
-    
     public function __construct($original_function, $hook_name, $priority, $accepted_args, $engine) {
         $this->original_function = $original_function;
         $this->hook_name = $hook_name;
         $this->priority = $priority;
         $this->accepted_args = $accepted_args;
         $this->engine = $engine;
-        $this->uses_references = $this->callback_uses_references($original_function);
     }
     
     public function __invoke(...$args ) {
@@ -40,11 +37,6 @@ class WP_Hook_Profiler_Callback_Wrapper {
             ];
         }
         $start = hrtime(true);
-//        if ($this->uses_references) {
-//            $result = $this->call_with_references($this->original_function, $args);
-//        } else {
-//            $result = call_user_func_array($this->original_function, $args);
-//        }
 
 		$original_function = $this->original_function;
 		$result = $original_function(...$args);
@@ -86,40 +78,5 @@ class WP_Hook_Profiler_Callback_Wrapper {
         }
         
         return $result;
-    }
-    
-    private function callback_uses_references($callback) {
-        try {
-            $reflection = $this->engine->get_callback_reflection($callback);
-            if (!$reflection) {
-                return false;
-            }
-            
-            foreach ($reflection->getParameters() as $param) {
-                if ($param->isPassedByReference()) {
-                    return true;
-                }
-            }
-        } catch (ReflectionException $e) {
-            return false;
-        }
-        
-        return false;
-    }
-    
-    private function call_with_references($callback, $args) {
-        if (is_string($callback)) {
-            return $callback(...$args);
-        } elseif (is_array($callback) && count($callback) === 2) {
-            return $callback[0]->{$callback[1]}(...$args);
-        } elseif (is_object($callback)) {
-            if ($callback instanceof Closure) {
-                return $callback(...$args);
-            } else {
-                return $callback(...$args);
-            }
-        }
-        
-        return call_user_func_array($callback, $args);
     }
 }
